@@ -16,21 +16,47 @@ class BaseScraper:
         }
 
     def _setup_driver(self):
-        """Khởi tạo Selenium Driver ẩn"""
+        """
+        Khởi tạo Selenium Driver.
+        Tự động xử lý cả môi trường Local (Windows/Mac) và Cloud (Linux).
+        """
         chrome_options = Options()
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless")  # Chạy ẩn. Nếu muốn xem trình duyệt chạy thì comment dòng này lại.
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--window-size=1920,1080")
-        return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+        # --- ƯU TIÊN 1: Dùng webdriver-manager (Tốt nhất cho Local Windows) ---
+        try:
+            return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        except Exception as e:
+            print(f"⚠️ Không dùng được Webdriver Manager: {e}")
+
+        # --- ƯU TIÊN 2: Dùng Driver mặc định của hệ thống (Tốt cho Streamlit Cloud/Linux) ---
+        try:
+            return webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            print(f"❌ Lỗi khởi tạo Driver: {e}")
+            return None  # Trả về None nếu thất bại toàn tập
 
     def get_links(self, url, item_selector, link_selector='a.link-load', progress_callback=None):
         """Dùng Selenium cuộn trang và lấy danh sách Link."""
-        driver = self._setup_driver()
+
+        driver = None  # Khai báo driver là None trước để tránh lỗi reference
         product_links = []
 
         try:
-            if progress_callback: progress_callback(f"🚀 Đang truy cập: {url}")
+            if progress_callback: progress_callback(f"🚀 Đang khởi động trình duyệt...")
+
+            # Khởi tạo driver
+            driver = self._setup_driver()
+
+            # Nếu driver khởi tạo thất bại (vẫn là None) thì ném lỗi
+            if not driver:
+                raise Exception("Không thể khởi động trình duyệt Chrome/Driver.")
+
+            if progress_callback: progress_callback(f"🔗 Đang truy cập: {url}")
             driver.get(url)
             time.sleep(2)
 
@@ -53,7 +79,7 @@ class BaseScraper:
 
             domain = "/".join(url.split("/")[:3])
 
-            for item in items[:5]:
+            for item in items[:6]:
                 link_tag = item.select_one(link_selector)
                 if link_tag and link_tag.get('href'):
                     full_link = link_tag.get('href')
@@ -63,8 +89,11 @@ class BaseScraper:
 
         except Exception as e:
             if progress_callback: progress_callback(f"❌ Lỗi Selenium: {e}")
+            print(f"Lỗi chi tiết: {e}")  # In ra terminal để debug
         finally:
-            driver.quit()
+            # --- SỬA LỖI TẠI ĐÂY: Chỉ quit() nếu driver tồn tại ---
+            if driver:
+                driver.quit()
 
         return list(set(product_links))
 
@@ -72,7 +101,6 @@ class BaseScraper:
         """Hàm ảo: Class con bắt buộc phải viết lại hàm này"""
         raise NotImplementedError
 
-    # --- ĐÂY LÀ HÀM QUAN TRỌNG BẠN ĐANG THIẾU HOẶC SAI TÊN ---
     def scrape_details_list(self, links, progress_bar=None, status_text=None):
         """Dùng Requests để cào chi tiết danh sách link"""
         data = []
