@@ -1,7 +1,6 @@
 import streamlit as st
 import json
-# import pandas as pd  <-- Không cần dùng pandas nữa vì đã bỏ phần xem bảng
-from scrapers import ViglaceraTilesScraper, ViglaceraAACScraper
+from scrapers import ViglaceraTilesScraper, ViglaceraAACScraper, VthmGroupScraper
 
 # --- CẤU HÌNH ---
 OPTIONS = {
@@ -22,13 +21,21 @@ OPTIONS = {
         "scraper_class": ViglaceraAACScraper,
         "item_selector": ".product-title",
         "link_selector": "a"
+    },
+    "Sản phẩm VTHM Group": {
+        "url": "https://vthmgroup.vn/san-pham",
+        "scraper_class": VthmGroupScraper,
+        # Selector này trỏ thẳng vào thẻ <a> bao quanh sản phẩm
+        "item_selector": "a.block.group.cursor-pointer",
+        # Để trống link_selector báo hiệu cho bot biết item chính là link
+        "link_selector": None
     }
 }
 
 # --- GIAO DIỆN WEB ---
 st.set_page_config(page_title="Viglacera Data Tool", page_icon="📥", layout="centered")
 
-st.title("📥 Tool Tải Dữ Liệu Viglacera")
+st.title("📥 Tool Tải Dữ Liệu Tự Động")
 st.write("Chọn danh mục sản phẩm và nhấn nút để bắt đầu.")
 st.markdown("---")
 
@@ -86,7 +93,7 @@ if st.button("🚀 Bắt đầu lấy dữ liệu", type="primary"):
                 data=json_str,
                 file_name=file_name,
                 mime="application/json",
-                type="primary"  # Làm nổi bật nút tải
+                type="primary"
             )
         else:
             st.warning("Đã chạy xong nhưng không thu thập được dữ liệu chi tiết.")
