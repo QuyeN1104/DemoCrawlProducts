@@ -335,3 +335,168 @@ class VthmGroupScraper(BaseScraper):
         except Exception as e:
             print(f"Lỗi parse: {e}")
             return None
+
+
+# --- CLASS 4: TaiceraVN (Đã tối ưu lấy chi tiết từ thẻ P) ---
+# --- CLASS 4: TaiceraVN (Bản nâng cấp: Smart Wait + Scroll) ---
+class TaiceraScraper(BaseScraper):
+
+    def get_links(self, url, item_selector, link_selector=None, progress_callback=None):
+        driver = None
+        product_links = set()
+
+        # Selector nút Next
+        NEXT_BTN_XPATH = "//ul[contains(@class,'page-numbers')]//li/a[contains(@class,'next')]"
+
+        try:
+            if progress_callback: progress_callback(f"🚀 Đang khởi động trình duyệt...")
+            driver = self._setup_driver()
+            wait = WebDriverWait(driver, 15)  # Thời gian chờ tối đa 15s
+
+            # --- BƯỚC 1: QUÉT DANH MỤC ---
+            target_urls = []
+            is_general_page = "san-pham" in url or len(url.split('/')) < 5
+
+            if is_general_page:
+                if progress_callback: progress_callback(f"🔍 Đang quét menu tìm danh mục...")
+                driver.get(url)
+                time.sleep(3)
+                soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+                menu_links = soup.select('#menu-item-1665 .sub-menu a')
+                for a in menu_links:
+                    href = a.get('href')
+                    if href and 'http' in href: target_urls.append(href)
+
+                if not target_urls:
+                    see_more = soup.select('h3.section-title a')
+                    for a in see_more:
+                        href = a.get('href')
+                        if href: target_urls.append(href)
+
+                target_urls = list(set(target_urls))
+                if progress_callback: progress_callback(f"✅ Tìm thấy {len(target_urls)} danh mục. Bắt đầu cào.")
+            else:
+                target_urls.append(url)
+
+            # --- BƯỚC 2: CÀO CHI TIẾT ---
+            total_cats = len(target_urls)
+            for i, cat_url in enumerate(target_urls):
+                msg = f"📂 [{i + 1}/{total_cats}] Danh mục: {cat_url}"
+                print(msg)
+                if progress_callback: progress_callback(msg)
+
+                try:
+                    driver.get(cat_url)
+                    page_count = 1
+
+                    while True:
+                        # --- [MỚI] KỸ THUẬT CHỐNG SÓT SẢN PHẨM ---
+
+                        # 1. Chờ sản phẩm xuất hiện (Thay vì sleep cứng)
+                        try:
+                            # Chờ ít nhất 1 sản phẩm xuất hiện trong DOM
+                            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, item_selector)))
+                        except:
+                            print("   ⚠️ Không thấy sản phẩm nào (Có thể trang trống hoặc load lỗi).")
+                            break  # Hết hoặc lỗi
+
+                        # 2. Cuộn trang xuống cuối để kích hoạt Lazy Load (nếu có)
+                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(2)  # Nghỉ 1 chút cho ảnh/item load lên
+
+                        # 3. Lấy dữ liệu
+                        soup = BeautifulSoup(driver.page_source, 'html.parser')
+                        items = soup.select(item_selector)
+
+                        current_links_count = 0
+                        for item in items:
+                            tag = item.select_one(link_selector) if link_selector else item.select_one('a')
+                            href = tag.get('href') if tag else None
+                            if href:
+                                if not href.startswith('http'): href = "https://taiceravn.com" + href
+                                if href not in product_links:
+                                    product_links.add(href)
+                                    current_links_count += 1
+
+                        print(f"   ↳ Trang {page_count}: +{current_links_count} SP.")
+
+                        # Điều kiện dừng an toàn
+                        if current_links_count == 0 and page_count > 1:
+                            # Thử đợi thêm 3s và quét lại lần cuối xem có phải do mạng lag không
+                            time.sleep(3)
+                            soup = BeautifulSoup(driver.page_source, 'html.parser')
+                            items = soup.select(item_selector)
+                            if not items: break
+
+                        # 4. Chuyển trang
+                        try:
+                            next_btn = driver.find_element(By.XPATH, NEXT_BTN_XPATH)
+                            next_href = next_btn.get_attribute('href')
+                            if next_href:
+                                driver.get(next_href)
+                                page_count += 1
+                            else:
+                                break
+                        except Exception:
+                            break
+
+                except Exception as e:
+                    print(f"Lỗi danh mục {cat_url}: {e}")
+                    continue
+
+        except Exception as e:
+            if progress_callback: progress_callback(f"❌ Lỗi Selenium: {e}")
+            print(f"Error: {e}")
+        finally:
+            if driver: driver.quit()
+
+        return list(product_links)
+
+    def parse_detail(self, soup, url):
+        # ... (Giữ nguyên hàm parse_detail KHÔNG ĐỔI) ...
+        try:
+            name_tag = soup.select_one('.product-title, h1.entry-title')
+            product_name = name_tag.text.strip() if name_tag else "N/A"
+
+            price_tag = soup.select_one('.price span.amount bdi')
+            price_sale = soup.select_one('.price ins span.amount bdi')
+            price = price_sale.text.strip() if price_sale else (price_tag.text.strip() if price_tag else "Liên hệ")
+
+            images = []
+            img_tags = soup.select('.product-gallery-slider img, .woocommerce-product-gallery__image img')
+            for img in img_tags:
+                src = img.get('src') or img.get('data-src') or img.get('data-large_image')
+                if src and 'http' in src: images.append(src)
+            images = list(set(images))
+
+            specs = {}
+            desc_content = soup.select_one('#tab-description, .woocommerce-Tabs-panel--description')
+            if desc_content:
+                paragraphs = desc_content.find_all('p')
+                for p in paragraphs:
+                    text = p.get_text().strip()
+                    clean_text = text.lstrip('–- ').strip()
+                    if ':' in clean_text:
+                        parts = clean_text.split(':', 1)
+                        specs[parts[0].strip().capitalize()] = parts[1].strip()
+                    elif "Đơn giá" in clean_text:
+                        specs["Thông tin giá"] = clean_text
+
+            rows = soup.select('table.woocommerce-product-attributes tr')
+            for row in rows:
+                th = row.select_one('th')
+                td = row.select_one('td')
+                if th and td: specs[th.text.strip()] = td.text.strip()
+
+            return {
+                'URL': url,
+                'Tên Sản Phẩm': product_name,
+                'Giá': price,
+                'Ảnh Đại Diện': images[0] if images else "N/A",
+                'Danh Sách Ảnh': images,
+                **specs
+            }
+        except Exception as e:
+            print(f"Lỗi parse Taicera: {e}")
+            return None

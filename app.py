@@ -1,6 +1,6 @@
 import streamlit as st
 import json
-from scrapers import ViglaceraTilesScraper, ViglaceraAACScraper, VthmGroupScraper
+from scrapers import ViglaceraTilesScraper, ViglaceraAACScraper, VthmGroupScraper, TaiceraScraper
 
 # --- CẤU HÌNH ---
 OPTIONS = {
@@ -29,6 +29,13 @@ OPTIONS = {
         "item_selector": "a.block.group.cursor-pointer",
         # Để trống link_selector báo hiệu cho bot biết item chính là link
         "link_selector": None
+    },
+    "Sản phẩm TaiceraVN": {
+        "url": "https://taiceravn.com/san-pham/",
+        "scraper_class": TaiceraScraper,
+        # Selector chuẩn xác dựa trên HTML bạn gửi
+        "item_selector": "div.product-small",
+        "link_selector": "a.woocommerce-LoopProduct-link"
     }
 }
 
