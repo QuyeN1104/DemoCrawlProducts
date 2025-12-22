@@ -1,6 +1,6 @@
 import streamlit as st
 import json
-from scrapers import ViglaceraTilesScraper, ViglaceraAACScraper, VthmGroupScraper, TaiceraScraper
+from scrapers import *
 
 # --- CẤU HÌNH ---
 OPTIONS = {
@@ -36,6 +36,20 @@ OPTIONS = {
         # Selector chuẩn xác dựa trên HTML bạn gửi
         "item_selector": "div.product-small",
         "link_selector": "a.woocommerce-LoopProduct-link"
+    },
+    "Sản phẩm Slabstone": {
+        "url": "https://slabstone.vn/san-pham/",
+        "scraper_class": SlabstoneScraper,
+        "item_selector": ".tv-product",
+        "link_selector": "a"
+    },
+    "Sản phẩm Amy.vn (Tự động quét hết)": {
+        "url": "https://amy.vn",
+        "scraper_class": AmyScraper,
+        # Selector lấy từ HTML danh sách sản phẩm (bạn gửi trước đó)
+        "item_selector": ".product-box",
+        # Selector link chi tiết
+        "link_selector": "a.more-details"
     }
 }
 
